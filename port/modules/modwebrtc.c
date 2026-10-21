@@ -318,7 +318,15 @@ static mp_obj_t webrtc_peer_make_new(const mp_obj_type_t* type, size_t n_args, s
     peer_connection_oniceconnectionstatechange(self->pc, webrtc_state_changed);
     __atomic_store_n(&self->state, PEER_CONNECTION_NEW, __ATOMIC_RELEASE);
 
-    error = pthread_create(&self->worker, NULL, webrtc_worker, self);
+    {
+        /* 워커 스택을 명시(128KB): mbedtls 핸드셰이크·STUN 처리(1.4KB+ 버퍼)·로그 포맷이 겹치면
+         * 기본 스택을 넘겨 칩이 리셋됐다(2026-10-21, 스트리밍 5~9초 후 크래시). */
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, 128 * 1024);
+        error = pthread_create(&self->worker, &attr, webrtc_worker, self);
+        pthread_attr_destroy(&attr);
+    }
     if (error != 0) {
         if (webrtc_close_internal(self)) {
             webrtc_unregister_peer(self);
@@ -577,14 +585,19 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &webrtc_peer_locals
 );
 
-extern int peer_log_read(char* out, int max, int* dropped);
+/* LOG_REDIRECT 빌드에서만 존재(크래시 유발로 기본 off) — 없으면 빈 문자열 */
+extern int peer_log_read(char* out, int max, int* dropped) __attribute__((weak));
 
 /* libpeer 내부 로그(링버퍼)를 꺼낸다. 진단용. */
 static mp_obj_t webrtc_log_read(void)
 {
     static char buf[4096];
     int dropped = 0;
-    int n = peer_log_read(buf, sizeof(buf), &dropped);
+    int n;
+    if (peer_log_read == NULL) {
+        return mp_obj_new_str("", 0);
+    }
+    n = peer_log_read(buf, sizeof(buf), &dropped);
     if (dropped > 0) {
         int extra = snprintf(buf + n, sizeof(buf) - n, "[peer log dropped %d]\n", dropped);
         if (extra > 0 && n + extra < (int)sizeof(buf)) {
