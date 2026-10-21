@@ -577,10 +577,29 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &webrtc_peer_locals
 );
 
+extern int peer_log_read(char* out, int max, int* dropped);
+
+/* libpeer 내부 로그(링버퍼)를 꺼낸다. 진단용. */
+static mp_obj_t webrtc_log_read(void)
+{
+    static char buf[4096];
+    int dropped = 0;
+    int n = peer_log_read(buf, sizeof(buf), &dropped);
+    if (dropped > 0) {
+        int extra = snprintf(buf + n, sizeof(buf) - n, "[peer log dropped %d]\n", dropped);
+        if (extra > 0 && n + extra < (int)sizeof(buf)) {
+            n += extra;
+        }
+    }
+    return mp_obj_new_str(buf, n);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(webrtc_log_read_obj, webrtc_log_read);
+
 static const mp_rom_map_elem_t webrtc_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_webrtc) },
     { MP_ROM_QSTR(MP_QSTR_PeerConnection), MP_ROM_PTR(&webrtc_peer_type) },
     { MP_ROM_QSTR(MP_QSTR_MAX_PEERS), MP_ROM_INT(WEBRTC_MAX_PEERS) },
+    { MP_ROM_QSTR(MP_QSTR_log_read), MP_ROM_PTR(&webrtc_log_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_random_bytes), MP_ROM_PTR(&webrtc_random_bytes_obj) },
     { MP_ROM_QSTR(MP_QSTR_SDP_TYPE_OFFER), MP_ROM_INT(SDP_TYPE_OFFER) },
     { MP_ROM_QSTR(MP_QSTR_SDP_TYPE_ANSWER), MP_ROM_INT(SDP_TYPE_ANSWER) },
