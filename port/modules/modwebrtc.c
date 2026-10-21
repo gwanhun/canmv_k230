@@ -455,7 +455,13 @@ static mp_obj_t webrtc_send_media(size_t n_args, const mp_obj_t* args, bool vide
     self = webrtc_begin_call(args[0]);
 
     MP_THREAD_GIL_EXIT();
-    pthread_mutex_lock(&self->mutex);
+    /* 워커가 네트워크 처리로 락을 잡고 있으면 기다리지 않고 이 프레임을 버린다(-11=EAGAIN).
+     * 블로킹 lock 이면 single-thread 카메라 루프(녹화/MQTT/모션)가 통째로 멈췄다(2026-10-21). */
+    if (pthread_mutex_trylock(&self->mutex) != 0) {
+        webrtc_end_call(self);
+        MP_THREAD_GIL_ENTER();
+        return mp_obj_new_int(-11);
+    }
     result = video ? peer_connection_send_video(self->pc, buffer.buf, buffer.len, timestamp_us)
                    : peer_connection_send_audio(self->pc, buffer.buf, buffer.len, timestamp_us);
     pthread_mutex_unlock(&self->mutex);
