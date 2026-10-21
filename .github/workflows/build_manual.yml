@@ -35,7 +35,7 @@ jobs:
         run: |
           rm -rf *
           ls -alh
-          ~/.bin/repo init -u https://github.com/canmv-k230/manifest.git -b master --repo-url=https://github.com/canmv-k230/git-repo.git
+          ~/.bin/repo init -u https://github.com/gwanhun/manifest.git -b master --repo-url=https://github.com/canmv-k230/git-repo.git
           ~/.bin/repo sync
 
       - name: Prepare Environment
