@@ -9,6 +9,11 @@ on:
         type: string
         default: >
           k230_canmv_01studio_defconfig
+      extra_config:
+        description: 'Extra Kconfig lines appended to each defconfig (space separated)'
+        required: false
+        type: string
+        default: 'CONFIG_ENABLE_BLUETOOTH=y'
 
 jobs:
   build:
@@ -37,6 +42,21 @@ jobs:
           ls -alh
           ~/.bin/repo init -u https://github.com/gwanhun/manifest.git -b master --repo-url=https://github.com/canmv-k230/git-repo.git
           ~/.bin/repo sync
+
+      - name: Apply extra config
+        run: |
+          # 펌웨어 기본값에 없는 옵션을 보드 설정에 덧붙인다(예: 블루투스).
+          for proj in $CONFIGS; do
+            for opt in $EXTRA_CONFIG; do
+              key="${opt%%=*}"
+              sed -i "/^${key}=/d;/^# ${key} is not set/d" "configs/${proj}"
+              echo "$opt" >> "configs/${proj}"
+            done
+            echo "== configs/${proj} tail"; tail -5 "configs/${proj}"
+          done
+        env:
+          CONFIGS: ${{ inputs.configs }}
+          EXTRA_CONFIG: ${{ inputs.extra_config }}
 
       - name: Prepare Environment
         run: |
